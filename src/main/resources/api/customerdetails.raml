@@ -1,0 +1,43 @@
+#%RAML 1.0
+baseUri: https://anypoint.mulesoft.com/mocking/api/v1/links/89838a90-d7fd-4dff-a381-063fd00357c0/ # 
+title: CustomerDetails
+description: This RAMl file contains all the endpoints present for getting, adding or deleting customer from organization database.
+
+types:
+  Customer: !include examples/Customer.raml
+
+/customer:
+  description: Customer APIs
+  get:
+    displayName: GET Customers List
+    description: This API retruns all the customers present in an Organization.
+    responses:
+      200:
+        body:
+          application/json:
+            type: Customer[]
+            examples:
+              output: !include /examples/CustomersList.raml
+  
+  post:
+    displayName: Add Customer
+    description: Adding a customer in database
+    body:
+      application/json:
+        type: Customer
+        examples:
+          input: !include /examples/CustomerRequest.raml
+
+  /{customerID}:
+    get:
+      displayName: Get Customer
+      description: This API returns a customer details for given customer ID
+      responses:
+        200:
+          body:
+            application/json:
+             type: Customer
+             examples:
+                output: !include /examples/CustomerRequest.raml
+
+            
