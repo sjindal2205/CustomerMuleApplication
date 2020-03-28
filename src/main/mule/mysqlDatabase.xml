@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="5a69021a-2c2a-4c82-a397-b0f761f07e48" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="password" database="muletraining" />
+	</db:config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="b385ccd4-0ca3-4633-99ff-47f61ec61b27" >
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config>
+	<flow name="GetAllEmployees" doc:id="38f4ef9a-77ac-40c7-97da-dc6b70751abf">
+		<http:listener doc:name="Listener" doc:id="154d2f6d-2ac3-412c-be00-d34552dab08d" config-ref="customerdetails-httpListenerConfig" path="/api/employees" allowedMethods="GET" />
+		<db:select doc:name="SelectAllEmployees" doc:id="bc6a86f6-278b-4cd0-8805-aa2eab0f4500" config-ref="Database_Config">
+			<db:sql>select * from employee_table;</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="f501c50c-b7ec-4805-a8df-9fb8fe813f43">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	employees: payload map ( payload01 , indexOfPayload01 ) -> {
+		ID: payload01.id,
+		Name: (payload01.firstname ++ " " ++ payload01.lastname),
+		Designation: payload01.designation default "",
+		Email_ID: payload01.email default "",
+		Registration_Date: payload01.reg_date as String default ""
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="GetEmployeeByID" doc:id="34983fc4-5711-45e1-9156-cdcf9f3d9c8f" >
+		<http:listener doc:name="Listener" doc:id="937d1a56-2ea9-4310-8ce2-9c4619b0d4b0" config-ref="customerdetails-httpListenerConfig" path="/api/employee" allowedMethods="GET"/>
+		<db:select doc:name="Select" doc:id="afda6241-235b-4689-a4cb-b78681f6318a" config-ref="Database_Config">
+			<db:sql >select * from employee_table where id = :ID;</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'ID': attributes.queryParams.id
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="2ccf58e5-2e0c-4480-b9e0-55caab6191b7" >
+			<when expression="#[(sizeOf(payload) &gt; 0)]">
+				<ee:transform doc:name="Transform Message" doc:id="4e7dce1a-32b8-4b93-b0de-97a541a2a616">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	employees: payload map ( payload01 , indexOfPayload01 ) -> {
+		ID: payload01.id,
+		Name: (payload01.firstname ++ " " ++ payload01.lastname),
+		Designation: payload01.designation default "",
+		Email_ID: payload01.email default "",
+		Registration_Date: payload01.reg_date as String default ""
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<set-payload value='{ "Employee does not exist" }' doc:name="Set Payload" doc:id="29049dba-e722-4b5c-91fc-55f0f656c2ec" mimeType="application/json" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="GetEmployeeByEmail" doc:id="e4c080b7-ba99-46cb-bd78-46bb615314c0" >
+		<http:listener doc:name="Listener" doc:id="a9913efb-9a23-4183-bb52-6f34a10ccefd" config-ref="customerdetails-httpListenerConfig" path="/api/employeeByEmail" allowedMethods="GET" />
+		<set-variable value='#[attributes.queryParams.email default ""]' doc:name="Set Variable" doc:id="3349b72a-58f1-4723-9723-727501dcb65f" variableName="emailId"/>
+		<db:select doc:name="Select" doc:id="ca320504-6809-4bf6-bff9-f8f968215e34" config-ref="Database_Config" >
+			<db:sql >select * from employee_table where email = :email</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'email': vars.emailId
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="db27c99b-e135-4f27-a87c-2a30cb51135d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	employees: payload map ( payload01 , indexOfPayload01 ) -> {
+		ID: payload01.id,
+		Name: (payload01.firstname ++ " " ++ payload01.lastname),
+		Designation: payload01.designation default "",
+		Email_ID: payload01.email default "",
+		Registration_Date: payload01.reg_date as String default ""
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="CreateEmployee" doc:id="14ed9cab-b184-42cb-81f8-869ba46a021a">
+		<http:listener doc:name="Listener" doc:id="e1f70626-6628-4617-a7c3-b100257652b1" config-ref="customerdetails-httpListenerConfig" path="/api/employee" allowedMethods="POST" />
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="fb6b80d7-266f-4728-bd1b-a0f4a38145f6" variableName="originalPayload" />
+		<http:request method="GET" doc:name="Request" doc:id="34d1e2ac-96e0-43b1-b084-6ed27775e757" path="/api/employeeByEmail" config-ref="HTTP_Request_configuration">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	'email' : payload.Email_ID
+}]]]></http:query-params>
+		</http:request>
+		<choice doc:name="Choice" doc:id="1a426673-5cb2-4b2c-a8c1-e541753e7aff">
+			<when expression="#[(sizeOf(payload.employees) == 0)]">
+				<db:select doc:name="Select" doc:id="9212a5ef-03b2-478a-a193-5315bac5d1c0" config-ref="Database_Config">
+					<db:sql >select IFNULL(MAX(id), 0) as max_id from employee_table</db:sql>
+				</db:select>
+				<db:insert doc:name="Insert" doc:id="5273f460-0f5e-4189-bbd2-8aa68987cf5d" config-ref="Database_Config">
+					<db:sql >insert into employee_table(id, firstname, lastname, designation, email, reg_date) values(:EmployeeID, :first, :last, :Designation, :Email, :Reg_date)</db:sql>
+					<db:input-parameters ><![CDATA[#[{
+	EmployeeID: (payload.max_id[0] + 1),
+	first: (vars.originalPayload.Name splitBy(' '))[0],
+	last: (vars.originalPayload.Name splitBy(' '))[1],
+	Email: vars.originalPayload.Email_ID,
+	Reg_date: vars.originalPayload.Registration_Date,
+	Designation: vars.originalPayload.Designation
+
+}]]]></db:input-parameters>
+				</db:insert>
+				<ee:transform doc:name="Transform Message" doc:id="7a670b80-5640-4baf-9e6a-0d28a68159ee" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Employee Added Successfully",
+	
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<set-payload value='{"Employee is already present"}' doc:name="Set Payload" doc:id="72ffe9cc-bbeb-47f7-8922-f92fe19ffc25" mimeType="application/json"/>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="UpdateEmployeeByID" doc:id="b485f4e2-c32a-4c4f-97e5-0ddc982bbc27" >
+		<http:listener doc:name="Listener" doc:id="ce0fd3c6-24c1-4239-91c6-419518d16eff" config-ref="customerdetails-httpListenerConfig" path="/api/employee/{ID}" allowedMethods="POST" responseStreamingMode="NEVER"/>
+		<set-variable value="#[attributes.uriParams.ID]" doc:name="Set Variable" doc:id="72fcbfef-fe40-42c4-8e07-53262f2cb9cb" variableName="EmployeeID"/>
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="1f6eae17-e67d-4230-8633-054591e90835" variableName="originalPayload"/>
+		<db:select doc:name="Select" doc:id="0835e4a2-d76c-4ade-8333-a64729ec62d5" config-ref="Database_Config">
+			<db:sql >Select email from employee_table where id = :ID</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	ID: attributes.uriParams.ID
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="bfbf369a-d4b9-41ec-aeab-029e449723fc" >
+			<when expression="#[payload[0].email == null]">
+				<ee:transform doc:name="Transform Message" doc:id="a97b1d98-b02d-41bc-8524-24e936f598f9" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Employee with ID " ++ vars.EmployeeID as String ++ " does not exist"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<db:update doc:name="Update" doc:id="5efc6f1b-5890-47fa-821b-1d6beb3bf262" config-ref="Database_Config">
+					<db:sql >update employee_table set designation=:Designation,email=:Email , firstname=:first, lastname=:last, reg_date=:Reg_date where id=:EmployeeID;</db:sql>
+					<db:input-parameters ><![CDATA[#[{
+	EmployeeID: vars.EmployeeID,
+	first: (vars.originalPayload.Name splitBy(' '))[0],
+	last: (vars.originalPayload.Name splitBy(' '))[1],
+	Email: vars.originalPayload.Email_ID,
+	Reg_date: vars.originalPayload.Registration_Date,
+	Designation: vars.originalPayload.Designation
+
+}]]]></db:input-parameters>
+				</db:update>
+				<ee:transform doc:name="Transform Message" doc:id="693b1c3b-e6c8-462a-aec7-db3b65b11f14" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	Message: ("Successfully Updated the employee with Employee ID '" ++ vars.EmployeeID as String ++ "'")
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="DeleteEmployeeByID" doc:id="f978020e-11a4-4c0b-bc54-49d9ba84423c" >
+		<http:listener doc:name="Listener" doc:id="b1587277-5310-42fa-8089-2840be2b1038" config-ref="customerdetails-httpListenerConfig" path="/api/deleteEmployee/{ID}" allowedMethods="DELETE" />
+		<set-variable value='#[attributes.uriParams.ID]' doc:name="Set Variable" doc:id="ac86fa9e-f892-4fc1-87c4-9f1a2f23c8a5" variableName="employeeID" />
+		<db:delete doc:name="Delete" doc:id="c85af786-7054-47ef-9519-f585a3d7a0ac" config-ref="Database_Config">
+			<db:sql >DELETE from employee_table where id = :EmployeeID</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	EmployeeID: vars.employeeID
+}]]]></db:input-parameters>
+		</db:delete>
+		<choice doc:name="Choice" doc:id="177c7f1f-b5d2-444f-befa-22f6e0df0cc2" >
+			<when expression="#[payload != 0]">
+				<ee:transform doc:name="Transform Message" doc:id="9af088b7-9dc5-4edf-bb96-14cd49b87188">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Successfully deleted employee id " ++ vars.employeeID as String , 
+	NumberReturned: payload
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="35f5fd34-9f2e-4660-9c15-bf8cc668e322" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Employee with ID " ++ vars.employeeID as String ++ " does not exist"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="mysqlDatabaseFlow" doc:id="50bbcf4b-ede3-4862-88ce-716f8c55ec4c" >
+		<http:listener doc:name="Listener" doc:id="4cd30224-6dcc-4853-b521-1fc0f9d310b3" config-ref="customerdetails-httpListenerConfig" path="/api/test"/>
+		<db:select doc:name="Select" doc:id="4832bcf1-7e7f-4085-8847-ac87c4929148" config-ref="Database_Config">
+			<db:sql >select IFNULL(MAX(id), 0) as maxid from employee_table</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="4c5f975b-b685-42e0-b9c4-f0f4de0cfaf8" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: payload[0].maxid,
+	message1: payload.maxid[0] + 1
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
