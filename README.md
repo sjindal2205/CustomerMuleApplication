@@ -1,4 +1,4 @@
-// This project contains CRUD operation for fetching, deleting, creating and updating employee from employee_table.
+// This project contains CRUD operation for fetching, deleting, creating and updating employee from employee_table. (FileName - mysqlDatabase.xml)
 
 // Functionalties used in this project
     
@@ -15,7 +15,7 @@ Employee CRUD Operations:
        Description: This API returns all the existing employees in database.
 
     2) Get an Employee with employee ID 
-       API Endpoint: GET /api/employee?id=3
+       API Endpoint: GET /api/employeeByID?id=3
        Description: This API returns all the existing employees in database.
 
     3) Create Employee
