@@ -12,8 +12,46 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="b385ccd4-0ca3-4633-99ff-47f61ec61b27" >
 		<http:request-connection host="localhost" port="8081" />
 	</http:request-config>
+	<sub-flow name="checkIfEmailExist_subFlow" doc:id="438f4d9e-3731-42bd-9e86-4cd5d552321b" >
+		<choice doc:name="Choice" doc:id="1a426673-5cb2-4b2c-a8c1-e541753e7aff">
+			<when expression="#[(sizeOf(payload.employees) == 0)]">
+				<db:select doc:name="Select" doc:id="9212a5ef-03b2-478a-a193-5315bac5d1c0" config-ref="Database_Config">
+					<db:sql>select IFNULL(MAX(id), 0) as max_id from employee_table</db:sql>
+				</db:select>
+				<db:insert doc:name="Insert" doc:id="5273f460-0f5e-4189-bbd2-8aa68987cf5d" config-ref="Database_Config">
+					<db:sql>insert into employee_table(id, firstname, lastname, designation, email, reg_date) values(:EmployeeID, :first, :last, :Designation, :Email, :Reg_date)</db:sql>
+					<db:input-parameters><![CDATA[#[{
+	EmployeeID: (payload.max_id[0] + 1),
+	first: (vars.originalPayload.Name splitBy(' '))[0],
+	last: (vars.originalPayload.Name splitBy(' '))[1],
+	Email: vars.originalPayload.Email_ID,
+	Reg_date: vars.originalPayload.Registration_Date,
+	Designation: vars.originalPayload.Designation
+
+}]]]></db:input-parameters>
+				</db:insert>
+				<ee:transform doc:name="Transform Message" doc:id="7a670b80-5640-4baf-9e6a-0d28a68159ee">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Employee Added Successfully",
+	
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<set-payload value='{"Employee is already present in database"}' doc:name="Set Payload" doc:id="72ffe9cc-bbeb-47f7-8922-f92fe19ffc25" mimeType="application/json" />
+			</otherwise>
+		</choice>
+	</sub-flow>
 	<flow name="GetAllEmployees" doc:id="38f4ef9a-77ac-40c7-97da-dc6b70751abf">
-		<http:listener doc:name="Listener" doc:id="154d2f6d-2ac3-412c-be00-d34552dab08d" config-ref="customerdetails-httpListenerConfig" path="/api/employees" allowedMethods="GET" />
+		<http:listener doc:name="Listener" doc:id="154d2f6d-2ac3-412c-be00-d34552dab08d" config-ref="customerdetails-httpListenerConfig" path="/api/employees" allowedMethods="GET" >
+			<http:error-response statusCode="500">
+			</http:error-response>
+		</http:listener>
 		<db:select doc:name="SelectAllEmployees" doc:id="bc6a86f6-278b-4cd0-8805-aa2eab0f4500" config-ref="Database_Config">
 			<db:sql>select * from employee_table;</db:sql>
 		</db:select>
@@ -35,7 +73,9 @@ output application/json
 		</ee:transform>
 	</flow>
 	<flow name="GetEmployeeByID" doc:id="34983fc4-5711-45e1-9156-cdcf9f3d9c8f" >
-		<http:listener doc:name="Listener" doc:id="937d1a56-2ea9-4310-8ce2-9c4619b0d4b0" config-ref="customerdetails-httpListenerConfig" path="/api/employee" allowedMethods="GET"/>
+		<http:listener doc:name="Listener" doc:id="937d1a56-2ea9-4310-8ce2-9c4619b0d4b0" config-ref="customerdetails-httpListenerConfig" path="/api/employeeByID" allowedMethods="GET">
+			<http:response statusCode="#[vars.statusCode default 200]" />
+		</http:listener>
 		<db:select doc:name="Select" doc:id="afda6241-235b-4689-a4cb-b78681f6318a" config-ref="Database_Config">
 			<db:sql >select * from employee_table where id = :ID;</db:sql>
 			<db:input-parameters ><![CDATA[#[{
@@ -62,7 +102,18 @@ output application/json
 		</ee:transform>
 			</when>
 			<otherwise >
-				<set-payload value='{ "Employee does not exist" }' doc:name="Set Payload" doc:id="29049dba-e722-4b5c-91fc-55f0f656c2ec" mimeType="application/json" />
+				<set-variable value="404" doc:name="Setting 404 " doc:id="01561f8d-9609-456f-a159-7b125579d86f" variableName="statusCode" />
+				<ee:transform doc:name="Transform Message" doc:id="c4a871dc-ebda-4ab6-8b5f-9b734523c114" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": "Employee does not exist"
+}
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
 			</otherwise>
 		</choice>
 	</flow>
@@ -102,67 +153,35 @@ output application/json
 	'email' : payload.Email_ID
 }]]]></http:query-params>
 		</http:request>
-		<choice doc:name="Choice" doc:id="1a426673-5cb2-4b2c-a8c1-e541753e7aff">
-			<when expression="#[(sizeOf(payload.employees) == 0)]">
-				<db:select doc:name="Select" doc:id="9212a5ef-03b2-478a-a193-5315bac5d1c0" config-ref="Database_Config">
-					<db:sql >select IFNULL(MAX(id), 0) as max_id from employee_table</db:sql>
-				</db:select>
-				<db:insert doc:name="Insert" doc:id="5273f460-0f5e-4189-bbd2-8aa68987cf5d" config-ref="Database_Config">
-					<db:sql >insert into employee_table(id, firstname, lastname, designation, email, reg_date) values(:EmployeeID, :first, :last, :Designation, :Email, :Reg_date)</db:sql>
-					<db:input-parameters ><![CDATA[#[{
-	EmployeeID: (payload.max_id[0] + 1),
-	first: (vars.originalPayload.Name splitBy(' '))[0],
-	last: (vars.originalPayload.Name splitBy(' '))[1],
-	Email: vars.originalPayload.Email_ID,
-	Reg_date: vars.originalPayload.Registration_Date,
-	Designation: vars.originalPayload.Designation
-
-}]]]></db:input-parameters>
-				</db:insert>
-				<ee:transform doc:name="Transform Message" doc:id="7a670b80-5640-4baf-9e6a-0d28a68159ee" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	message: "Employee Added Successfully",
-	
-}]]></ee:set-payload>
-					</ee:message>
-				</ee:transform>
-			</when>
-			<otherwise>
-				<set-payload value='{"Employee is already present"}' doc:name="Set Payload" doc:id="72ffe9cc-bbeb-47f7-8922-f92fe19ffc25" mimeType="application/json"/>
-			</otherwise>
-		</choice>
+		<flow-ref doc:name="Flow Reference" doc:id="ba7ede57-82ea-4ae2-b7d8-2b70365303ec" name="checkIfEmailExist_subFlow" />
 	</flow>
 	<flow name="UpdateEmployeeByID" doc:id="b485f4e2-c32a-4c4f-97e5-0ddc982bbc27" >
-		<http:listener doc:name="Listener" doc:id="ce0fd3c6-24c1-4239-91c6-419518d16eff" config-ref="customerdetails-httpListenerConfig" path="/api/employee/{ID}" allowedMethods="POST" responseStreamingMode="NEVER"/>
+		<http:listener doc:name="Listener" doc:id="ce0fd3c6-24c1-4239-91c6-419518d16eff" config-ref="customerdetails-httpListenerConfig" path="/api/employee/{ID}" allowedMethods="POST" responseStreamingMode="NEVER">
+			<http:response statusCode="#[vars.statusCode default 200]" />
+			<http:error-response >
+				<http:body ><![CDATA[#[output application/json --- error]]]></http:body>
+			</http:error-response>
+		</http:listener>
 		<set-variable value="#[attributes.uriParams.ID]" doc:name="Set Variable" doc:id="72fcbfef-fe40-42c4-8e07-53262f2cb9cb" variableName="EmployeeID"/>
 		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="1f6eae17-e67d-4230-8633-054591e90835" variableName="originalPayload"/>
-		<db:select doc:name="Select" doc:id="0835e4a2-d76c-4ade-8333-a64729ec62d5" config-ref="Database_Config">
-			<db:sql >Select email from employee_table where id = :ID</db:sql>
-			<db:input-parameters ><![CDATA[#[{
-	ID: attributes.uriParams.ID
-}]]]></db:input-parameters>
-		</db:select>
-		<choice doc:name="Choice" doc:id="bfbf369a-d4b9-41ec-aeab-029e449723fc" >
-			<when expression="#[payload[0].email == null]">
-				<ee:transform doc:name="Transform Message" doc:id="a97b1d98-b02d-41bc-8524-24e936f598f9" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
+		<try doc:name="Try" doc:id="d7f1d032-b07b-482e-b807-9172a8b6838d" >
+			<http:request method="GET" doc:name="Call GetEmployeeByID Flow" doc:id="d0da60df-3d98-4040-9a7b-b9897e33d0af" config-ref="HTTP_Request_configuration" path="/api/employeeByID">
+			<http:query-params><![CDATA[#[output application/java
 ---
 {
-	message: "Employee with ID " ++ vars.EmployeeID as String ++ " does not exist"
-}]]></ee:set-payload>
-					</ee:message>
-				</ee:transform>
-			</when>
-			<otherwise >
-				<db:update doc:name="Update" doc:id="5efc6f1b-5890-47fa-821b-1d6beb3bf262" config-ref="Database_Config">
-					<db:sql >update employee_table set designation=:Designation,email=:Email , firstname=:first, lastname=:last, reg_date=:Reg_date where id=:EmployeeID;</db:sql>
-					<db:input-parameters ><![CDATA[#[{
+	'id' : attributes.uriParams.ID
+}]]]></http:query-params>
+		</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="42a73ccb-111b-44d3-a5f6-e1395d99cf95" type="ANY">
+					<raise-error doc:name="Raise error" doc:id="99f0fdda-3c00-4f42-b3d1-96be2a0da235" type="REQUEST:REQUEST_FAILED"/>
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<logger level="INFO" doc:name="Logger" doc:id="14f22980-da04-41e5-bbbb-fa59f93106e0" message='#["\n Employee ID found"]' />
+		<db:update doc:name="Update" doc:id="5efc6f1b-5890-47fa-821b-1d6beb3bf262" config-ref="Database_Config">
+					<db:sql>update employee_table set designation=:Designation,email=:Email , firstname=:first, lastname=:last, reg_date=:Reg_date where id=:EmployeeID;</db:sql>
+					<db:input-parameters><![CDATA[#[{
 	EmployeeID: vars.EmployeeID,
 	first: (vars.originalPayload.Name splitBy(' '))[0],
 	last: (vars.originalPayload.Name splitBy(' '))[1],
@@ -172,9 +191,9 @@ output application/json
 
 }]]]></db:input-parameters>
 				</db:update>
-				<ee:transform doc:name="Transform Message" doc:id="693b1c3b-e6c8-462a-aec7-db3b65b11f14" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
+		<ee:transform doc:name="Transform Message" doc:id="693b1c3b-e6c8-462a-aec7-db3b65b11f14">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
@@ -182,11 +201,28 @@ output application/json
 }]]></ee:set-payload>
 					</ee:message>
 				</ee:transform>
-			</otherwise>
-		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="623fa6f2-5f67-4e50-8a36-632a67244162" type="REQUEST:REQUEST_FAILED">
+				<ee:transform doc:name="Transform Message" doc:id="a97b1d98-b02d-41bc-8524-24e936f598f9">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Employee with ID " ++ vars.EmployeeID as String ++ " does not exist"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="404" doc:name="Set status 404" doc:id="619a5f74-8721-4e46-8b9c-24f3bd72c27b" variableName="statusCode" />
+			</on-error-continue>
+		</error-handler>
 	</flow>
 	<flow name="DeleteEmployeeByID" doc:id="f978020e-11a4-4c0b-bc54-49d9ba84423c" >
-		<http:listener doc:name="Listener" doc:id="b1587277-5310-42fa-8089-2840be2b1038" config-ref="customerdetails-httpListenerConfig" path="/api/deleteEmployee/{ID}" allowedMethods="DELETE" />
+		<http:listener doc:name="Listener" doc:id="b1587277-5310-42fa-8089-2840be2b1038" config-ref="customerdetails-httpListenerConfig" path="/api/deleteEmployee/{ID}" allowedMethods="DELETE" >
+			<http:error-response statusCode="#[vars.statusCode1]" >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
 		<set-variable value='#[attributes.uriParams.ID]' doc:name="Set Variable" doc:id="ac86fa9e-f892-4fc1-87c4-9f1a2f23c8a5" variableName="employeeID" />
 		<db:delete doc:name="Delete" doc:id="c85af786-7054-47ef-9519-f585a3d7a0ac" config-ref="Database_Config">
 			<db:sql >DELETE from employee_table where id = :EmployeeID</db:sql>
@@ -209,34 +245,24 @@ output application/json
 		</ee:transform>
 			</when>
 			<otherwise >
-				<ee:transform doc:name="Transform Message" doc:id="35f5fd34-9f2e-4660-9c15-bf8cc668e322" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
+				<raise-error doc:name="Raise error" doc:id="6cb1ae7e-172b-4761-b2e6-e1d5fe88ed63" type="EMPLOYEE:NOT_FOUND"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="15abe652-24a9-4d9b-930c-6b3dfe5a1732" type="EMPLOYEE:NOT_FOUND">
+				<set-variable value="404" doc:name="Set Variable" doc:id="dde432c3-afec-4417-a471-e1891a16c709" variableName="statusCode1" />
+				<ee:transform doc:name="Transform Message" doc:id="35f5fd34-9f2e-4660-9c15-bf8cc668e322">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
+	statusCode: vars.statusCode1,
 	message: "Employee with ID " ++ vars.employeeID as String ++ " does not exist"
 }]]></ee:set-payload>
 					</ee:message>
 				</ee:transform>
-			</otherwise>
-		</choice>
-	</flow>
-	<flow name="mysqlDatabaseFlow" doc:id="50bbcf4b-ede3-4862-88ce-716f8c55ec4c" >
-		<http:listener doc:name="Listener" doc:id="4cd30224-6dcc-4853-b521-1fc0f9d310b3" config-ref="customerdetails-httpListenerConfig" path="/api/test"/>
-		<db:select doc:name="Select" doc:id="4832bcf1-7e7f-4085-8847-ac87c4929148" config-ref="Database_Config">
-			<db:sql >select IFNULL(MAX(id), 0) as maxid from employee_table</db:sql>
-		</db:select>
-		<ee:transform doc:name="Transform Message" doc:id="4c5f975b-b685-42e0-b9c4-f0f4de0cfaf8" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	message: payload[0].maxid,
-	message1: payload.maxid[0] + 1
-}]]></ee:set-payload>
-			</ee:message>
-		</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
 </mule>
